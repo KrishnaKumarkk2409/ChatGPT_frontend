@@ -32,7 +32,7 @@ export default function GptIntro() {
           >
             <i className="fa-solid fa-bolt "></i>
           </span>
-          <span className="mr-2">gpt - 3.5</span>
+          <span className="mr-2">Tech</span>
         </button>
 
         <button
@@ -54,12 +54,12 @@ export default function GptIntro() {
           >
             <IonIcon icon={sparkles} />
           </span>
-          <span className="mr-2">gpt - 4</span>
+          <span className="mr-2">Non-Tech</span>
         </button>
       </div>
       <div className=" h-96 flex items-start justify-center">
         <h1 className=" text-4xl font-bold mt-5 text-center text-gray-300">
-          ChatGPT
+          Encap.ai
         </h1>
       </div>
     </>

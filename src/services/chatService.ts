@@ -1,64 +1,60 @@
 import { ChatMessageType, ModalList, useSettings } from "../store/store";
 
-const apiUrl = "https://api.openai.com/v1/chat/completions";
+const CHAT_API_URL = "http://18.210.106.165:7860/api/v1/run/d8937800-9764-4f9c-b1f7-3c3f6573064c";
 const IMAGE_GENERATION_API_URL = "https://api.openai.com/v1/images/generations";
 
 export async function fetchResults(
   messages: Omit<ChatMessageType, "id" | "type">[],
   modal: string,
   signal: AbortSignal,
-  onData: (data: any) => void,
+  onData: (data: string) => void,
   onCompletion: () => void
 ) {
+  // 1. Serialize your message history into a single string.
+  //    You can customize this formatting however your API expects.
+  const chatInput = messages
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n");
+
+  // 2. Build the payload exactly as your custom API wants it.
+  const payload = {
+    input_value: chatInput,
+    input_type: "chat",
+    output_type: "chat",
+  };
+
   try {
-    const response = await fetch(apiUrl, {
-      method: `POST`,
-      signal: signal,
+    const res = await fetch(CHAT_API_URL, {
+      method: "POST",
+      signal,
       headers: {
-        "content-type": `application/json`,
-        accept: `text/event-stream`,
-        Authorization: `Bearer ${localStorage.getItem("apikey")}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: useSettings.getState().settings.selectedModal,
-        temperature: 0.7,
-        stream: true,
-        messages: messages,
-      }),
+      body: JSON.stringify(payload),
     });
 
-    if (response.status !== 200) {
-      console.log(response);
-      throw new Error("Error fetching results");
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("Chat API error:", res.status, errText);
+      throw new Error(`Chat API returned ${res.status}`);
     }
-    const reader: any = response.body?.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
 
-      if (done) {
-        onCompletion();
-        break;
-      }
+    // 3. Read back the full response (custom API returns JSON).
+    const json = await res.json();
 
-      let chunk = new TextDecoder("utf-8").decode(value, { stream: true });
+    // 4. Drill into the nested structure and pull out the reply message.
+    const reply =
+      json.outputs?.[0]?.outputs?.[0]?.results?.text ||
+      json.outputs?.[0]?.outputs?.[0]?.results?.message?.data?.text ||
+      "";
 
-      const chunks = chunk.split("\n").filter((x: string) => x !== "");
+    // 5. Send only that string (the AI's response) to the callback function.
+    onData(reply);
+    onCompletion();
 
-      chunks.forEach((chunk: string) => {
-        if (chunk === "data: [DONE]") {
-          return;
-        }
-        if (!chunk.startsWith("data: ")) return;
-        chunk = chunk.replace("data: ", "");
-        const data = JSON.parse(chunk);
-        if (data.choices[0].finish_reason === "stop") return;
-        onData(data.choices[0].delta.content);
-      });
-    }
-  } catch (error) {
-    if (error instanceof DOMException || error instanceof Error) {
-      throw new Error(error.message);
-    }
+  } catch (error: any) {
+    console.error("fetchResults error:", error);
+    throw error;
   }
 }
 
@@ -69,12 +65,13 @@ export async function fetchModals() {
         Authorization: `Bearer ${localStorage.getItem("apikey")}`,
       },
     });
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    if (error instanceof DOMException || error instanceof Error) {
-      throw new Error(error.message);
+    if (!response.ok) {
+      throw new Error(`Model‐list API returned ${response.status}`);
     }
+    return await response.json();
+  } catch (error: any) {
+    console.error("fetchModals error:", error);
+    throw error;
   }
 }
 
@@ -84,7 +81,6 @@ export type ImageSize =
   | "1024x1024"
   | "1280x720"
   | "1920x1080"
-  | "1024x1024"
   | "1792x1024"
   | "1024x1792";
 
@@ -105,8 +101,7 @@ export async function generateImage(
   const selectedModal = useSettings.getState().settings.selectedModal;
 
   const response = await fetch(IMAGE_GENERATION_API_URL, {
-    method: `POST`,
-    // signal: signal,
+    method: "POST",
     headers: {
       "content-type": `application/json`,
       accept: `text/event-stream`,
@@ -121,6 +116,9 @@ export async function generateImage(
       ],
     }),
   });
-  const body: IMAGE_RESPONSE = await response.json();
-  return body;
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Image API error ${response.status}: ${err}`);
+  }
+  return (await response.json()) as IMAGE_RESPONSE;
 }

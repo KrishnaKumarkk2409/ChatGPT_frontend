@@ -14,6 +14,8 @@ const apiKeyLength = 40;
 export default function Apikey() {
   const [userapikey, setUserApikey] = useState("");
   const { setApiKey } = useAuth();
+  // console.log("apiKey ",userapikey);
+  
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

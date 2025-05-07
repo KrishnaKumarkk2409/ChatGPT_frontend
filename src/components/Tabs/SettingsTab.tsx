@@ -35,8 +35,13 @@ export default function SettingsTab({ visible }: { visible: boolean }) {
     state.apikey,
     state.setApiKey,
   ]);
+
+  console.log("apiKey ",apikey);
+
   const [newApiKey, setNewApiKey] = useState(apikey);
   const [editApiKey, setEditApiKey] = useState(false);
+  console.log("editApiKey ",editApiKey);
+
   const [confirmDeleteChats, setConfirmDeleteChats] = useState(false);
   const [importExportStatus, setImportExportStatus] = useState({
     importing: false,

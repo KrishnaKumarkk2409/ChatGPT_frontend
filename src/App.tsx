@@ -84,12 +84,21 @@ function App() {
                 </span>
                 By
                 <a
-                  href="https://www.prasadbro.com/"
+                  href="https://www.linkedin.com/in/krishnakumar2409/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="ml-2 underline"
                 >
-                  Prasadbro
+                  Er. Krishna Kumar 
+                </a>
+                <span> at</span>
+                <a
+                  href="https://www.encaptechno.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-2 underline"
+                >
+                 Encaptechno
                 </a>
               </footer>
             </div>
