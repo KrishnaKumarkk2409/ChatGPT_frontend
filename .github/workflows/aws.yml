@@ -1,1 +1,77 @@
-buhrebjv frb
+name: Deploy React App to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for React
+        id: meta-react
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+
+      - name: Build and push React Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta-react.outputs.tags }}
+          labels: ${{ steps.meta-react.outputs.labels }}
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Check if Docker is installed
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "Docker not installed, installing..."
+              sudo apt update
+              sudo apt install -y docker.io
+              sudo systemctl start docker
+              sudo systemctl enable docker
+            fi
+            # Verify Docker is running
+            docker info || (echo "Docker not running" && exit 1)
+            # Log in to GHCR
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # Clean up Docker to ensure space
+            docker system prune -a -f
+            # Stop and remove any existing react-app container
+            docker stop react-app || true
+            docker rm react-app || true
+            # Pull the latest image
+            docker pull ${{ steps.meta-react.outputs.tags }} || (echo "React pull failed" && exit 1)
+            # Run the container on port 3000
+            docker run -d --name react-app -p 3000:3000 ${{ steps.meta-react.outputs.tags }} || (echo "React run failed" && exit 1)
+            # Ensure Nginx is running
+            if ! sudo systemctl is-active nginx >/dev/null 2>&1; then
+              echo "Nginx is not running, starting it..."
+              sudo systemctl start nginx || (echo "Nginx start failed" && exit 1)
+            fi
