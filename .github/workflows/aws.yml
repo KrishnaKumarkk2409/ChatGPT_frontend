@@ -94,19 +94,19 @@ jobs:
             # Set up Nginx as a reverse proxy to React app running on port 5174
             echo "Setting up Nginx as a reverse proxy to React app on port 5174"
             sudo tee /etc/nginx/sites-available/react-app <<EOF
-server {
-    listen 8080;
+            server {
+            listen 8080;
 
-    location / {
-        proxy_pass http://localhost:5174;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-    }
-}
-EOF
+            location / {
+             proxy_pass http://localhost:5174;
+             proxy_http_version 1.1;
+             proxy_set_header Upgrade \$http_upgrade;
+             proxy_set_header Connection 'upgrade';
+             proxy_set_header Host \$host;
+             proxy_cache_bypass \$http_upgrade;
+                }
+              }
+             EOF
 
             # Enable and reload Nginx for the new configuration
             sudo ln -s /etc/nginx/sites-available/react-app /etc/nginx/sites-enabled/
