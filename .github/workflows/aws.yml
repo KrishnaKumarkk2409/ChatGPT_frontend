@@ -68,10 +68,48 @@ jobs:
             docker rm react-app || true
             # Pull the latest image
             docker pull ${{ steps.meta-react.outputs.tags }} || (echo "React pull failed" && exit 1)
-            # Run the container on port 3000
-            docker run -d --name react-app -p 3000:3000 ${{ steps.meta-react.outputs.tags }} || (echo "React run failed" && exit 1)
+            # Run the container on port 5174 (adjust to reflect your app's port)
+            docker run -d --name react-app -p 5174:5174 ${{ steps.meta-react.outputs.tags }} || (echo "React run failed" && exit 1)
+
+            # Install Nginx if not installed
+            if ! command -v nginx >/dev/null 2>&1; then
+              echo "Nginx not installed, installing..."
+              sudo apt update
+              sudo apt install -y nginx
+            fi
+
+            # Configure Nginx to run on port 8080 instead of 80
+            sudo sed -i 's/listen 80 default_server;/listen 8080;/g' /etc/nginx/sites-available/default
+            sudo sed -i 's/listen \[::\]:80 default_server;/listen \[::\]:8080;/g' /etc/nginx/sites-available/default
+
+            # Reload Nginx configuration
+            sudo systemctl reload nginx
+
             # Ensure Nginx is running
             if ! sudo systemctl is-active nginx >/dev/null 2>&1; then
               echo "Nginx is not running, starting it..."
               sudo systemctl start nginx || (echo "Nginx start failed" && exit 1)
             fi
+
+            # Set up Nginx as a reverse proxy to React app running on port 5174
+            echo "Setting up Nginx as a reverse proxy to React app on port 5174"
+            sudo tee /etc/nginx/sites-available/react-app <<EOF
+server {
+    listen 8080;
+
+    location / {
+        proxy_pass http://localhost:5174;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOF
+
+            # Enable and reload Nginx for the new configuration
+            sudo ln -s /etc/nginx/sites-available/react-app /etc/nginx/sites-enabled/
+            sudo systemctl reload nginx
+
+            echo "Deployment successful"
