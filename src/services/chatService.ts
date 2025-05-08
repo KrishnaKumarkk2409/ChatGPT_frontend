@@ -1,6 +1,6 @@
 import { ChatMessageType, ModalList, useSettings } from "../store/store";
 
-const CHAT_API_URL = "http://18.210.106.165:7860/api/v1/run/d8937800-9764-4f9c-b1f7-3c3f6573064c";
+const CHAT_API_URL = "https://langflow.encap.ai/api/v1/run/23ad6eee-ca2a-44b9-998b-70ce5548ec3d";
 const IMAGE_GENERATION_API_URL = "https://api.openai.com/v1/images/generations";
 
 export async function fetchResults(
