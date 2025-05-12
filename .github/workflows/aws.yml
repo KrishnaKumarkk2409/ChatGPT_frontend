@@ -68,8 +68,8 @@ jobs:
             docker rm react-app || true
             # Pull the latest image
             docker pull ${{ steps.meta-react.outputs.tags }} || (echo "React pull failed" && exit 1)
-            # Run the container on port 5174 (adjust to reflect your app's port)
-            docker run -d --name react-app -p 5174:5174 ${{ steps.meta-react.outputs.tags }} || (echo "React run failed" && exit 1)
+            # Run the container on port 5173 (adjust to reflect your app's port)
+            docker run -d --name react-app -p 5173:5173 ${{ steps.meta-react.outputs.tags }} || (echo "React run failed" && exit 1)
 
             # Install Nginx if not installed
             if ! command -v nginx >/dev/null 2>&1; then
@@ -91,14 +91,14 @@ jobs:
               sudo systemctl start nginx || (echo "Nginx start failed" && exit 1)
             fi
 
-            # Set up Nginx as a reverse proxy to React app running on port 5174
-            echo "Setting up Nginx as a reverse proxy to React app on port 5174"
+            # Set up Nginx as a reverse proxy to React app running on port 5173
+            echo "Setting up Nginx as a reverse proxy to React app on port 5173"
             sudo tee /etc/nginx/sites-available/react-app <<EOF
             server {
             listen 8080;
 
             location / {
-             proxy_pass http://localhost:5174;
+             proxy_pass http://localhost:5173;
              proxy_http_version 1.1;
              proxy_set_header Upgrade \$http_upgrade;
              proxy_set_header Connection 'upgrade';
