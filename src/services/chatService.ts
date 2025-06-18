@@ -1,8 +1,13 @@
+// src/api/chatAndImageApi.tsx
+
 import { ChatMessageType, ModalList, useSettings } from "../store/store";
 
 const CHAT_API_URL = "https://langflow.encap.ai/api/v1/run/23ad6eee-ca2a-44b9-998b-70ce5548ec3d";
 const IMAGE_GENERATION_API_URL = "https://api.openai.com/v1/images/generations";
 
+/**
+ * Streams chat responses from LangFlow and calls onData for each piece of text.
+ */
 export async function fetchResults(
   messages: Omit<ChatMessageType, "id" | "type">[],
   modal: string,
@@ -10,17 +15,17 @@ export async function fetchResults(
   onData: (data: string) => void,
   onCompletion: () => void
 ) {
-  // 1. Serialize your message history into a single string.
-  //    You can customize this formatting however your API expects.
+  // 1. Serialize the message history into a single prompt string
   const chatInput = messages
     .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
     .join("\n");
 
-  // 2. Build the payload exactly as your custom API wants it.
+  // 2. Build the payload, requesting streaming
   const payload = {
     input_value: chatInput,
     input_type: "chat",
     output_type: "chat",
+    stream: true, // <-- Tell LangFlow to stream the response
   };
 
   try {
@@ -29,6 +34,7 @@ export async function fetchResults(
       signal,
       headers: {
         "Content-Type": "application/json",
+        Accept: "text/event-stream", // <-- Indicate that we want SSE-style streaming
       },
       body: JSON.stringify(payload),
     });
@@ -39,25 +45,66 @@ export async function fetchResults(
       throw new Error(`Chat API returned ${res.status}`);
     }
 
-    // 3. Read back the full response (custom API returns JSON).
-    const json = await res.json();
+    if (!res.body) {
+      throw new Error("ReadableStream not supported by environment.");
+    }
 
-    // 4. Drill into the nested structure and pull out the reply message.
-    const reply =
-      json.outputs?.[0]?.outputs?.[0]?.results?.text ||
-      json.outputs?.[0]?.outputs?.[0]?.results?.message?.data?.text ||
-      "";
+    // 3. Read the response as a stream of SSE lines
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
 
-    // 5. Send only that string (the AI's response) to the callback function.
-    onData(reply);
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      // SSE events are separated by "\n\n". Process each event as it arrives.
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const chunk = buffer.slice(0, boundary).trim();
+        buffer = buffer.slice(boundary + 2);
+
+        if (chunk.startsWith("data:")) {
+          const raw = chunk.replace(/^data:\s*/, "");
+          if (raw === "[DONE]") {
+            // End of stream sentinel
+            onCompletion();
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(raw);
+            // Drill into JSON to find incremental content.
+            // Example structure: { choices: [ { delta: { content: "..." } } ] }
+            const delta =
+              parsed.choices?.[0]?.delta?.content ??
+              parsed.choices?.[0]?.text ??
+              "";
+            if (delta) {
+              onData(delta);
+            }
+          } catch {
+            // If it's not valid JSON, just send raw text
+            onData(raw);
+          }
+        }
+
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+
+    // In case the stream ends without explicit "[DONE]"
     onCompletion();
-
   } catch (error: any) {
     console.error("fetchResults error:", error);
     throw error;
   }
 }
 
+/**
+ * Fetches the list of available OpenAI models.
+ */
 export async function fetchModals() {
   try {
     const response = await fetch("https://api.openai.com/v1/models", {
@@ -93,6 +140,9 @@ export type IMAGE = {
 };
 export type DallEImageModel = Extract<ModalList, "dall-e-2" | "dall-e-3">;
 
+/**
+ * Generates images using OpenAI's Image API.
+ */
 export async function generateImage(
   prompt: string,
   size: ImageSize,
@@ -103,22 +153,25 @@ export async function generateImage(
   const response = await fetch(IMAGE_GENERATION_API_URL, {
     method: "POST",
     headers: {
-      "content-type": `application/json`,
-      accept: `text/event-stream`,
+      "Content-Type": "application/json",
+      Accept: "text/event-stream", // If your front-end expects SSE, keep this. Otherwise "application/json" is fine.
       Authorization: `Bearer ${localStorage.getItem("apikey")}`,
     },
     body: JSON.stringify({
       model: selectedModal,
-      prompt: prompt,
+      prompt,
       n: numberOfImages,
       size: useSettings.getState().settings.dalleImageSize[
         selectedModal as DallEImageModel
       ],
+      stream: false, // Dall-E image endpoints typically do not stream; set false
     }),
   });
+
   if (!response.ok) {
     const err = await response.text();
     throw new Error(`Image API error ${response.status}: ${err}`);
   }
+
   return (await response.json()) as IMAGE_RESPONSE;
 }
